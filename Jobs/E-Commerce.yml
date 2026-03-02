@@ -1,0 +1,60 @@
+resources:
+  jobs:
+    E_Commerce:
+      name: E-Commerce
+      tasks:
+        - task_key: bronze_customer
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/01.bronze/prod/01.customer_prod
+            source: WORKSPACE
+        - task_key: bronze_product
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/01.bronze/prod/02.product_prod
+            source: WORKSPACE
+        - task_key: bronze_transactions
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/01.bronze/prod/03.transactions_prod
+            source: WORKSPACE
+        - task_key: silver_customer
+          depends_on:
+            - task_key: bronze_transactions
+            - task_key: bronze_product
+            - task_key: bronze_customer
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/02.silver/prod/01.customer_prod
+            source: WORKSPACE
+        - task_key: silver_product
+          depends_on:
+            - task_key: bronze_transactions
+            - task_key: bronze_product
+            - task_key: bronze_customer
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/02.silver/prod/02.product_prod
+            source: WORKSPACE
+        - task_key: silver_transactions
+          depends_on:
+            - task_key: bronze_customer
+            - task_key: bronze_product
+            - task_key: bronze_transactions
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/02.silver/prod/03.transactions_prod
+            source: WORKSPACE
+        - task_key: gold_customer_rank
+          depends_on:
+            - task_key: silver_customer
+            - task_key: silver_product
+            - task_key: silver_transactions
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/03.gold/prod/customer_rank_prod
+            source: WORKSPACE
+        - task_key: gold_product_sales
+          depends_on:
+            - task_key: silver_customer
+            - task_key: silver_product
+            - task_key: silver_transactions
+          notebook_task:
+            notebook_path: /Workspace/E-Commerce/03.gold/prod/product_sales_prod
+            source: WORKSPACE
+      queue:
+        enabled: true
+      performance_target: PERFORMANCE_OPTIMIZED
