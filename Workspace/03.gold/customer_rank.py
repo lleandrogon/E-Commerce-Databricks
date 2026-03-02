@@ -1,0 +1,156 @@
+# Databricks notebook source
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
+gold_path = "/Volumes/e_commerce/logistics/source/ETL/gold"
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM e_commerce.logistics.silver_customer LIMIT 50;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM e_commerce.logistics.silver_transactions LIMIT 50;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT
+# MAGIC     c.customer_id,
+# MAGIC     c.name,
+# MAGIC     c.gender,
+# MAGIC     c.birthdate,
+# MAGIC     c.home_location,
+# MAGIC     c.home_country,
+# MAGIC     c.home_location_lat,
+# MAGIC     c.home_location_long,
+# MAGIC
+# MAGIC     COUNT(CASE 
+# MAGIC         WHEN t.payment_status = 'Success' THEN t.transaction_id
+# MAGIC         ELSE NULL
+# MAGIC     END) AS total_orders,
+# MAGIC
+# MAGIC     SUM(CASE
+# MAGIC         WHEN t.payment_status = 'Success' THEN t.total_amount
+# MAGIC         ELSE 0
+# MAGIC     END) AS total_spent,
+# MAGIC
+# MAGIC     AVG(CASE
+# MAGIC         WHEN t.payment_status = 'Success' THEN t.total_amount
+# MAGIC         ELSE NULL
+# MAGIC     END) AS avg_ticket,
+# MAGIC
+# MAGIC     MIN(CASE
+# MAGIC         WHEN t.payment_status = 'Success' THEN t.created_at
+# MAGIC         ELSE NULL
+# MAGIC     END) AS first_purchase_date,
+# MAGIC
+# MAGIC     MAX(CASE
+# MAGIC         WHEN t.payment_status = 'Success' THEN t.created_at
+# MAGIC         ELSE NULL
+# MAGIC     END) AS last_purchase_date,
+# MAGIC
+# MAGIC     DATEDIFF(CURRENT_DATE(), c.first_join_date) AS customer_lifetime_days,
+# MAGIC
+# MAGIC     DENSE_RANK() OVER (
+# MAGIC         ORDER BY
+# MAGIC             SUM(CASE
+# MAGIC                 WHEN t.payment_status = 'Success' THEN t.total_amount
+# MAGIC                 ELSE 0
+# MAGIC             END) DESC
+# MAGIC     ) AS customer_rank_by_revenue
+# MAGIC
+# MAGIC FROM e_commerce.logistics.silver_customer AS c
+# MAGIC LEFT JOIN e_commerce.logistics.silver_transactions AS t
+# MAGIC ON c.customer_id = t.customer_id
+# MAGIC GROUP BY
+# MAGIC     c.customer_id,
+# MAGIC     c.name,
+# MAGIC     c.gender,
+# MAGIC     c.birthdate,
+# MAGIC     c.home_location,
+# MAGIC     c.home_country,
+# MAGIC     c.home_location_lat,
+# MAGIC     c.home_location_long,
+# MAGIC     c.first_join_date
+# MAGIC ORDER BY total_spent DESC
+# MAGIC LIMIT 50;
+
+# COMMAND ----------
+
+df = spark.sql("""
+    SELECT
+        c.customer_id,
+        c.name,
+        c.gender,
+        c.birthdate,
+        c.home_location,
+        c.home_country,
+        c.home_location_lat,
+        c.home_location_long,
+
+        COUNT(CASE 
+            WHEN t.payment_status = 'Success' THEN t.transaction_id
+            ELSE NULL
+        END) AS total_orders,
+
+        SUM(CASE
+            WHEN t.payment_status = 'Success' THEN t.total_amount
+            ELSE 0
+        END) AS total_spent,
+
+        AVG(CASE
+            WHEN t.payment_status = 'Success' THEN t.total_amount
+            ELSE NULL
+        END) AS avg_ticket,
+
+        MIN(CASE
+            WHEN t.payment_status = 'Success' THEN t.created_at
+            ELSE NULL
+        END) AS first_purchase_date,
+
+        MAX(CASE
+            WHEN t.payment_status = 'Success' THEN t.created_at
+            ELSE NULL
+        END) AS last_purchase_date,
+
+        DATEDIFF(CURRENT_DATE(), c.first_join_date) AS customer_lifetime_days,
+
+        DENSE_RANK() OVER (
+            ORDER BY
+                SUM(CASE
+                    WHEN t.payment_status = 'Success' THEN t.total_amount
+                    ELSE 0
+                END) DESC
+        ) AS customer_rank_by_revenue
+
+    FROM e_commerce.logistics.silver_customer AS c
+    LEFT JOIN e_commerce.logistics.silver_transactions AS t
+    ON c.customer_id = t.customer_id
+    GROUP BY
+        c.customer_id,
+        c.name,
+        c.gender,
+        c.birthdate,
+        c.home_location,
+        c.home_country,
+        c.home_location_lat,
+        c.home_location_long,
+        c.first_join_date
+    ORDER BY total_spent DESC        
+""")
+
+df.write.mode("overwrite") \
+    .format("delta") \
+    .option("mergeSchema", "true") \
+    .save(f"{gold_path}/customer_rank")
+
+# COMMAND ----------
+
+df.write.mode("overwrite") \
+    .format("delta") \
+    .option("mergeSchema", "true") \
+    .saveAsTable("e_commerce.logistics.gold_customer_rank")
